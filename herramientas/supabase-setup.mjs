@@ -92,6 +92,11 @@ CREATE TABLE IF NOT EXISTS orders (
   delivery_type text DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS orders_date_idx ON orders (date DESC);
+-- Migración: id pasa a text para poder asignar PED-XXXXXX (antes uuid de la nube).
+ALTER TABLE orders ALTER COLUMN id DROP DEFAULT;
+DO $$ BEGIN
+  ALTER TABLE orders ALTER COLUMN id TYPE text USING id::text;
+EXCEPTION WHEN others THEN NULL; END $$;
 `;
 
 const RLS_SQL = `
@@ -136,6 +141,59 @@ DO $$ BEGIN
     ALTER PUBLICATION supabase_realtime ADD TABLE public.orders;
   END IF;
 END $$;
+`;
+
+// Numeración correlativa: el trigger asigna PED-XXXXXX a cada pedido nuevo
+// respetando webConfig.orderStartNumber (Panel Web > Maestros); los existentes no se re-numeran.
+const ORDER_NUMBER_TRIGGER_SQL = `
+CREATE OR REPLACE FUNCTION public.assign_order_number()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  cfg jsonb;
+  start_n bigint := 1;
+  max_existing bigint := 0;
+  next_n bigint;
+BEGIN
+  IF NEW.id LIKE 'PED-%' THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT value INTO cfg FROM public.app_config WHERE key = 'webConfig';
+  IF cfg IS NOT NULL AND cfg->>'orderStartNumber' IS NOT NULL THEN
+    BEGIN
+      start_n := GREATEST(1, (cfg->>'orderStartNumber')::bigint);
+    EXCEPTION WHEN OTHERS THEN start_n := 1; END;
+  END IF;
+
+  SELECT COALESCE(MAX((substring(id FROM 5))::bigint), 0) INTO max_existing
+    FROM public.orders WHERE id LIKE 'PED-%';
+
+  -- Atómico: sobre la misma fila de app_config se fija "last" = último número asignado
+  -- y se retorna el siguiente calculado en la misma sentencia (línea bajo clave).
+  INSERT INTO public.app_config (key, value)
+    VALUES ('orderSequence', jsonb_build_object('last', start_n - 1))
+  ON CONFLICT (key) DO UPDATE
+    SET value = jsonb_build_object('last',
+      GREATEST(
+        start_n,
+        (COALESCE((app_config.value->>'last')::bigint, start_n - 1)) + 1,
+        max_existing + 1
+      ))
+  RETURNING (value->>'last')::bigint INTO next_n;
+
+  NEW.id := 'PED-' || LPAD(next_n::text, 6, '0');
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_orders_assign_number ON public.orders;
+CREATE TRIGGER trg_orders_assign_number
+BEFORE INSERT ON public.orders
+FOR EACH ROW EXECUTE FUNCTION public.assign_order_number();
 `;
 
 // ---------- Seed ----------
@@ -194,14 +252,16 @@ function simpleUpserts(table, rows, colNames) {
 async function main() {
   console.log(`= Setup Supabase ${PROJECT_REF} =`);
 
-  console.log('  [1/5] Creando tablas...');
+  console.log('  [1/6] Creando tablas...');
   await runSql(SCHEMA_SQL);
-  console.log('  [2/5] Aplicando RLS mínimo (anon: leer catálogo + insertar pedidos)...');
+  console.log('  [2/6] Aplicando RLS mínimo (anon: leer catálogo + insertar pedidos)...');
   await runSql(RLS_SQL);
-  console.log('  [3/5] Habilitando Realtime (orders en supabase_realtime)...');
+  console.log('  [3/6] Habilitando Realtime (orders en supabase_realtime)...');
   await runSql(REALTIME_SQL);
+  console.log('  [4/6] Numeración correlativa de pedidos (trigger PED-XXXXXX)...');
+  await runSql(ORDER_NUMBER_TRIGGER_SQL);
 
-  console.log('  [4/5] Cargando datos locales...');
+  console.log('  [5/6] Cargando datos locales...');
   const local = readLocal();
   console.log(`    productos: ${local.products.length} · categorias: ${local.categories.length} · servicios: ${local.services.length}`);
 
@@ -219,7 +279,7 @@ async function main() {
     await exec('app_config webConfig', `INSERT INTO app_config (key, value) VALUES ('webConfig', ${jsonLit(local.webConfig)}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;`);
   }
 
-  console.log('  [5/5] Verificación por REST (anon key)...');
+  console.log('  [6/6] Verificación por REST (anon key)...');
   const anon = SUPABASE_URL + '/rest/v1/';
   const key = process.env.SUPABASE_ANON_KEY || SUPABASE_SERVICE_ROLE_KEY;
   const h = { apikey: key, Authorization: 'Bearer ' + key };
