@@ -116,9 +116,10 @@ DO $$ BEGIN
   CREATE POLICY p_orders_anon_insert ON orders FOR INSERT TO anon WITH CHECK (true);
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 -- El web usa "Prefer: return=representation" (INSERT...RETURNING), que aplica la política SELECT.
--- anon debe ver la fila que inserta; se bloquea UPDATE/DELETE para que no pueda modificar/borrar.
+-- Tiene que ser visible para cualquier rol (sin "TO anon") para que Realtime también
+-- retransmita los INSERT al suscriptor del panel local (service_role).
 DO $$ BEGIN
-  CREATE POLICY p_orders_anon_read ON orders FOR SELECT TO anon USING (true);
+  CREATE POLICY p_orders_read_public ON orders FOR SELECT USING (true);
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   CREATE POLICY p_orders_anon_block_update ON orders FOR UPDATE TO anon USING (false);
@@ -126,6 +127,15 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   CREATE POLICY p_orders_anon_block_delete ON orders FOR DELETE TO anon USING (false);
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+`;
+
+// Realtime: sin esto, el api-server local no recibe los INSERT de pedidos en vivo.
+const REALTIME_SQL = `
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE schemaname = 'public' AND tablename = 'orders') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.orders;
+  END IF;
+END $$;
 `;
 
 // ---------- Seed ----------
@@ -184,12 +194,14 @@ function simpleUpserts(table, rows, colNames) {
 async function main() {
   console.log(`= Setup Supabase ${PROJECT_REF} =`);
 
-  console.log('  [1/4] Creando tablas...');
+  console.log('  [1/5] Creando tablas...');
   await runSql(SCHEMA_SQL);
-  console.log('  [2/4] Aplicando RLS mínimo (anon: leer catálogo + insertar pedidos)...');
+  console.log('  [2/5] Aplicando RLS mínimo (anon: leer catálogo + insertar pedidos)...');
   await runSql(RLS_SQL);
+  console.log('  [3/5] Habilitando Realtime (orders en supabase_realtime)...');
+  await runSql(REALTIME_SQL);
 
-  console.log('  [3/4] Cargando datos locales...');
+  console.log('  [4/5] Cargando datos locales...');
   const local = readLocal();
   console.log(`    productos: ${local.products.length} · categorias: ${local.categories.length} · servicios: ${local.services.length}`);
 
@@ -207,7 +219,7 @@ async function main() {
     await exec('app_config webConfig', `INSERT INTO app_config (key, value) VALUES ('webConfig', ${jsonLit(local.webConfig)}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;`);
   }
 
-  console.log('  [4/4] Verificación por REST (anon key)...');
+  console.log('  [5/5] Verificación por REST (anon key)...');
   const anon = SUPABASE_URL + '/rest/v1/';
   const key = process.env.SUPABASE_ANON_KEY || SUPABASE_SERVICE_ROLE_KEY;
   const h = { apikey: key, Authorization: 'Bearer ' + key };

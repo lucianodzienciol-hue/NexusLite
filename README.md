@@ -51,7 +51,7 @@ La tienda puede leer el catálogo y registrar pedidos directamente desde Supabas
 
 3. El front (`web/app.js`) usa la anon key (pública) para leer catálogo e insertar pedidos por `/rest/v1/*`. Si no hay credenciales o el backend no responde, cae al `data.json`/`/api/web-data`.
 
-> **Seguridad**: la `anon` key es pública por diseño — puede leer catálogo/config, insertar pedidos y ver la tabla `orders` (política RLS `USING(true)` para que el `INSERT ... RETURNING` del front funcione; UPDATE/DELETE están bloqueados para `anon`). Para producción conviene restringir esa lectura (p. ej. columna `client_token` con política `USING(client_token = current_setting('request.headers')::jsonb->>'x-client-token')`). La `service_role` da acceso total y debe vivir únicamente en `.env`.
+> **Seguridad**: la `anon` key es pública por diseño — puede leer catálogo/config, insertar pedidos y ver la tabla `orders` (política RLS `USING(true)` **para todos los roles** porque los INSERT requieren `return=representation` y Realtime evalúa la política del rol emisor contra el suscriptor `service_role`; UPDATE/DELETE están bloqueados para `anon`). El script `supabase-setup.mjs` además agrega `orders` a la publicación `supabase_realtime` para que el `api-server` local reciba los pedidos en vivo. Para producción conviene restringir esa lectura (p. ej. columna `client_token` con política `USING(client_token = current_setting('request.headers')::jsonb->>'x-client-token')`). La `service_role` da acceso total y debe vivir únicamente en `.env`.
 
 ## Rediseño del front
 
