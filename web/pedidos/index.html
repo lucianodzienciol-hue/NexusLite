@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Pedidos — Malcriado de Vinos</title>
+  <meta name="description" content="Vista de pedidos online de Malcriado de Vinos" />
+  <meta name="theme-color" content="#010101" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Pedidos" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="icon-180.png" />
+  <link rel="icon" type="image/png" href="icon-192.png" />
+  <link rel="stylesheet" href="pedidos.css" />
+</head>
+<body>
+  <header class="topbar">
+    <img src="icon-180.png" alt="" class="topbar-logo" />
+    <div class="topbar-titles">
+      <h1>Pedidos</h1>
+      <span id="lastUpdate" class="last-update">—</span>
+    </div>
+  </header>
+
+  <div id="offlineBanner" class="offline-banner" hidden>Sin conexión — mostrando la última lista guardada</div>
+
+  <div class="toolbar">
+    <div class="search-wrap">
+      <input id="searchInput" type="search" placeholder="Buscar por nombre, tel&eacute;fono, n&uacute;mero..." autocomplete="off" />
+      <button id="clearSearch" class="clear-search" hidden title="Limpiar">&#10005;</button>
+    </div>
+    <button id="refreshBtn" class="refresh-btn" title="Actualizar">&#8635;</button>
+  </div>
+
+  <div id="countBar" class="count-bar"></div>
+
+  <main id="list" class="list"></main>
+
+  <div id="bottomSpacer" class="bottom-spacer"></div>
+
+  <script src="pedidos.js"></script>
+</body>
+</html>
