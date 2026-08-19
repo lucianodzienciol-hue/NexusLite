@@ -1,5 +1,42 @@
 
     const API_BASE = '/api';
+
+    const SUPABASE_URL = 'https://rjtoqsyrxvtipacnxdld.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJqdG9xc3lyeHZ0aXBhY254ZGxkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwODI4MjIsImV4cCI6MjEwMjY1ODgyMn0.Uhdn0hqF6-LnLM-E4BU249hf6HU3pTv2_NkhYQiE9-g';
+
+    function mapSbProduct(p) {
+      const n = v => Number(v) || 0;
+      return {
+        id: p.id, code: p.code || '', name: p.name || '', price: n(p.price), cost: n(p.cost),
+        stock: n(p.stock), category: p.category || '', source: p.source || 'web', description: p.description || '',
+        image: p.image || '', oferta: p.oferta || 0, nuevo: p.nuevo || 0, webDesc: p.web_desc || '',
+        ofertaPrice: n(p.oferta_price), fichaTecnica: p.ficha_tecnica || '', fichaTecnicaFile: p.ficha_tecnica_file || '',
+      };
+    }
+
+    async function loadFromSupabase() {
+      const sbUrl = (allConfig && allConfig.supabaseUrl) || SUPABASE_URL;
+      const sbKey = (allConfig && allConfig.supabaseKey) || SUPABASE_ANON_KEY;
+      if (!sbUrl || !sbKey) throw new Error('Sin credenciales Supabase');
+      const H = { apikey: sbKey, Authorization: 'Bearer ' + sbKey };
+      const j = async p => {
+        const r = await fetch(sbUrl + '/rest/v1/' + p, { headers: H });
+        if (!r.ok) throw new Error('Supabase ' + r.status);
+        return r.json();
+      };
+      const [prods, cats, cfgArr] = await Promise.all([
+        j('products?select=*&order=id'),
+        j('web_categories?select=*&order=name'),
+        j('app_config?key=eq.webConfig&select=value'),
+      ]);
+      const cfg = (cfgArr && cfgArr[0] && cfgArr[0].value) || {};
+      return {
+        products: (prods || []).map(mapSbProduct),
+        categories: cats || [],
+        config: { ...cfg, supabaseUrl: sbUrl, supabaseKey: sbKey },
+      };
+    }
+
     let allProducts = [];
     let allCategories = [];
     let allBanners = [];
@@ -316,6 +353,16 @@ document.title = allConfig.siteTitle || 'Malcriado de Vinos';
           allBanners = (data.config && data.config.banners) || [];
           allConfig = { ...(data.config || {}), supabaseUrl: data.supabaseUrl || '', supabaseKey: data.supabaseKey || '', adminPin: data.adminPin || '', whatsapp: data.whatsapp || '' };
           afterLoadFallback();
+          return;
+        } catch {}
+
+        try {
+          const data = await loadFromSupabase();
+          allProducts = data.products || [];
+          allCategories = data.categories || [];
+          allBanners = (data.config && data.config.banners) || [];
+          allConfig = data.config || {};
+          afterLoadFallback();
         } catch {
           document.getElementById('prodGrid').innerHTML = '<div class="empty-state">Error al cargar los datos.</div>';
         }
@@ -329,6 +376,13 @@ document.title = allConfig.siteTitle || 'Malcriado de Vinos';
       renderProducts(allProducts, '');
       renderFooter(allConfig);
       document.getElementById('offersBtn').style.display = allConfig.showOffersButton !== false ? '' : 'none';
+      if (allConfig.whatsapp) {
+        const num = allConfig.whatsapp.replace(/[^0-9]/g, '');
+        const btn = document.getElementById('waBtn');
+        if (btn) { btn.href = 'https://wa.me/' + num + '?text=Hola%21+Quiero+consultar+por+productos'; btn.style.display = 'flex'; }
+      }
+      const dismissed = localStorage.getItem('mv_popup_dismissed');
+      if (dismissed !== '1') showPopup(allConfig);
     }
 
     load();
