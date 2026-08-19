@@ -20,7 +20,7 @@
       if (!sbUrl || !sbKey) throw new Error('Sin credenciales Supabase');
       const H = { apikey: sbKey, Authorization: 'Bearer ' + sbKey };
       const j = async p => {
-        const r = await fetch(sbUrl + '/rest/v1/' + p, { headers: H });
+        const r = await fetch(sbUrl + '/rest/v1/' + p, { headers: H, signal: AbortSignal.timeout(10000) });
         if (!r.ok) throw new Error('Supabase ' + r.status);
         return r.json();
       };
@@ -313,9 +313,18 @@
       }
     });
 
-    // ===== LOAD =====
+// ===== LOAD =====
     async function load() {
+      let ok = false;
       try {
+        const data = await loadFromSupabase();
+        allProducts = data.products || [];
+        allCategories = data.categories || [];
+        allBanners = (data.config && data.config.banners) || [];
+        allConfig = data.config || {};
+        afterLoadFallback(); ok = true;
+      } catch {}
+      if (!ok) try {
         const r = await fetch(API_BASE + '/web-data');
         if (!r.ok) throw new Error('Error');
         const data = await r.json();
@@ -323,49 +332,20 @@
         allCategories = data.categories || [];
         allBanners = (data.config && data.config.banners) || [];
         allConfig = data.config || {};
-
-document.title = allConfig.siteTitle || 'Malcriado de Vinos';
-
-        renderHero(allBanners);
-        renderCategories(allCategories, '');
-        renderProducts(allProducts, '');
-        renderFooter(allConfig);
-        document.getElementById('offersBtn').style.display = allConfig.showOffersButton !== false ? '' : 'none';
-
-        if (allConfig.whatsapp) {
-          const num = allConfig.whatsapp.replace(/[^0-9]/g, '');
-          const btn = document.getElementById('waBtn');
-          btn.href = 'https://wa.me/' + num + '?text=Hola%21+Quiero+consultar+por+productos';
-          btn.style.display = 'flex';
-        }
-
-        const dismissed = localStorage.getItem('mv_popup_dismissed');
-        if (dismissed !== '1') {
-          showPopup(allConfig);
-        }
-      } catch {
-        try {
-          const r = await fetch('data.json');
-          if (!r.ok) throw new Error('Error');
-          const data = await r.json();
-          allProducts = data.products || [];
-          allCategories = data.categories || [];
-          allBanners = (data.config && data.config.banners) || [];
-          allConfig = { ...(data.config || {}), supabaseUrl: data.supabaseUrl || '', supabaseKey: data.supabaseKey || '', adminPin: data.adminPin || '', whatsapp: data.whatsapp || '' };
-          afterLoadFallback();
-          return;
-        } catch {}
-
-        try {
-          const data = await loadFromSupabase();
-          allProducts = data.products || [];
-          allCategories = data.categories || [];
-          allBanners = (data.config && data.config.banners) || [];
-          allConfig = data.config || {};
-          afterLoadFallback();
-        } catch {
-          document.getElementById('prodGrid').innerHTML = '<div class="empty-state">Error al cargar los datos.</div>';
-        }
+        afterLoadFallback(); ok = true;
+      } catch {}
+      if (!ok) try {
+        const r = await fetch('data.json');
+        if (!r.ok) throw new Error('Error');
+        const data = await r.json();
+        allProducts = data.products || [];
+        allCategories = data.categories || [];
+        allBanners = (data.config && data.config.banners) || [];
+        allConfig = { ...(data.config || {}), supabaseUrl: data.supabaseUrl || '', supabaseKey: data.supabaseKey || '', adminPin: data.adminPin || '', whatsapp: data.whatsapp || '' };
+        afterLoadFallback(); ok = true;
+      } catch {}
+      if (!ok) {
+        document.getElementById('prodGrid').innerHTML = '<div class="empty-state">Error al cargar los datos.</div>';
       }
     }
 
