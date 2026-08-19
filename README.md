@@ -1,0 +1,67 @@
+# Nexus Lite
+
+Sistema de gestión liviano + tienda web. Incluye:
+
+- **`web/`** — tienda online estática (HTML + CSS + JS vanilla). La de la tienda está lista para conectarse a Supabase por REST o a un backend local.
+- **`src/`** — app de administración (React + Vite + Tailwind). Se compila a `dist/`.
+- **`api-server.js`** — API Express: sirve `web/` y la SPA, gestiona datos en SQLite (`database.db`) y se sincroniza con Supabase (pedidos por realtime).
+- **`server-lite.js`** — servidor liviano (estático + proxy a la API principal).
+- **`cloudflare-worker.js`** — worker de Cloudflare para distribuir la tienda.
+- **`herramientas/`** — utilidades de desarrollo:
+  - `rediseno.mjs` — CLI para modularizar el front, extraer el contrato, validar y publicar.
+  - `analizar-diseno.bat` — arrastrás una imagen o pegás una URL y captura paleta/tema.
+  - `supabase-setup.mjs` — crea las tablas en Supabase y carga los datos locales (seed).
+- **`dist/`** — build de la SPA (artefacto, en `.gitignore`).
+
+## Setup local
+
+```bash
+npm install          # dependencias (incluye @supabase/supabase-js)
+npm run build        # compila la SPA a dist/
+npm run start        # API en el puerto configurado (STANDALONE=true PORT=4050)
+```
+
+Para desarrollo de la tienda, serví `web/` con cualquier servidor estático:
+
+```bash
+npx http-server web -p 4060 -c-1
+```
+
+## Supabase
+
+La tienda puede leer el catálogo y registrar pedidos directamente desde Supabase por REST.
+
+### Configuración
+
+1. Copiá `.env.sample` a `.env` y completá:
+
+   | Variable | Dónde se usa | Exposición |
+   | --- | --- | --- |
+   | `SUPABASE_URL` | server + front | pública |
+   | `SUPABASE_SERVICE_ROLE_KEY` | solo server local | **privada, jamás se sube** |
+   | `PORT` | server | — |
+
+2. Creá las tablas y cargá los datos locales:
+
+   ```bash
+   node herramientas/supabase-setup.mjs
+   ```
+
+   Requiere las credenciales en `.env` y el `SUPABASE_ACCESS_TOKEN` (Account settings → Access tokens) para ejecutar SQL por Management API.
+
+3. El front (`web/app.js`) usa la anon key (pública) para leer catálogo e insertar pedidos por `/rest/v1/*`. Si no hay credenciales o el backend no responde, cae al `data.json`/`/api/web-data`.
+
+> **Seguridad**: la `anon` key es pública por diseño (solo lee catálogo e inserta pedidos, vía RLS). La `service_role` da acceso total y debe vivir únicamente en `.env`.
+
+## Rediseño del front
+
+Ver `herramientas/rediseno.mjs`:
+
+```bash
+node herramientas/rediseno.mjs modularizar    # index.html -> index + css + js
+node herramientas/rediseno.mjs validar        # valida contratos (IDs, handlers, clases)
+node herramientas/rediseno.mjs publicar       # copia a dist/ y al espejo
+node herramientas/rediseno.mjs analizar-imagen imagen.png --nombre=demo
+node herramientas/rediseno.mjs analizar-web https://tienda.com --nombre=ref
+node herramientas/rediseno.mjs aplicar-tema temas/demo.tema.json
+```

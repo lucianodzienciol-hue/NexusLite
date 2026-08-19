@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.chrome-profile-lite/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+.env
+github_token.txt
+
+# Carpetas de trabajo / artefactos locales
+herramientas/disenos/
+herramientas/backups/
+Copia/
+Contexto/
+manual/

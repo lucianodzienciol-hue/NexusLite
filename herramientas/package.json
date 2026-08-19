@@ -1,0 +1,15 @@
+{
+  "name": "nexus-lite-rediseno-tool",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Herramientas de rediseño del frontend de Nexus Lite (dev only).",
+  "type": "module",
+  "scripts": {
+    "rediseno": "node rediseno.mjs"
+  },
+  "dependencies": {
+    "jpeg-js": "^0.4.4",
+    "pngjs": "^7.0.0",
+    "ws": "^8.21.3"
+  }
+}

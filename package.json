@@ -1,0 +1,28 @@
+{
+  "name": "nexus-lite",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "build:gh": "set VITE_BASE_URL=./ && vite build",
+    "start": "set STANDALONE=true && set PORT=4050 && node api-server.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.111.0",
+    "@tailwindcss/vite": "^4.1.14",
+    "@vitejs/plugin-react": "^5.0.4",
+    "better-sqlite3": "^13.0.1",
+    "express": "^4.21.2",
+    "http-proxy-middleware": "^3.0.5",
+    "lucide-react": "^0.546.0",
+    "motion": "^12.23.24",
+    "react": "^19.0.1",
+    "react-dom": "^19.0.1",
+    "vite": "^6.2.3"
+  },
+  "devDependencies": {
+    "tailwindcss": "^4.1.14",
+    "typescript": "~5.8.2"
+  }
+}
